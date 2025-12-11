@@ -2,7 +2,9 @@
 
 import { useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { Monitor, ListVideo, Play } from 'lucide-react';
+import { Monitor, ListVideo, Zap, Radio } from 'lucide-react';
+import GlassCard from '@/components/ui/GlassCard';
+import { motion } from 'framer-motion';
 
 export default function AdminDashboard() {
     const { tvs, playlists, fetchData } = useStore();
@@ -14,53 +16,92 @@ export default function AdminDashboard() {
     const activeTVs = tvs.filter(tv => tv.assignedPlaylistId !== null).length;
     const totalSlides = playlists.reduce((acc, pl) => acc + pl.slides.length, 0);
 
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.1
+            }
+        }
+    };
+
+    const item = {
+        hidden: { opacity: 0, y: 20 },
+        show: { opacity: 1, y: 0 }
+    };
+
     return (
         <div className="space-y-8">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+                <h2 className="text-4xl font-bold tracking-tight text-white mb-2">Dashboard</h2>
                 <p className="text-zinc-400">Overview of your digital signage network.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            >
                 <StatCard
-                    title="Total TVs"
+                    title="Total Displays"
                     value={tvs.length}
-                    subtitle={`${activeTVs} Currently Active`}
+                    subtitle="Registered Screens"
                     icon={Monitor}
+                    color="blue"
+                />
+                <StatCard
+                    title="Active Content"
+                    value={activeTVs}
+                    subtitle="Currently Playing"
+                    icon={Zap}
+                    color="yellow"
                 />
                 <StatCard
                     title="Playlists"
                     value={playlists.length}
                     subtitle={`${totalSlides} Total Slides`}
                     icon={ListVideo}
+                    color="purple"
                 />
                 <StatCard
                     title="System Status"
                     value="Online"
                     subtitle="Supabase Connected"
-                    icon={Play}
-                    highlight
+                    icon={Radio}
+                    color="green"
                 />
-            </div>
+            </motion.div>
 
             {/* Quick Lookup for Unassigned TVs */}
             {tvs.filter(tv => !tv.assignedPlaylistId).length > 0 && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                    <h3 className="text-lg font-medium text-white mb-4">TVs Needing Attention</h3>
-                    <div className="space-y-3">
-                        {tvs.filter(tv => !tv.assignedPlaylistId).map(tv => (
-                            <div key={tv.id} className="flex justify-between items-center bg-black/40 p-4 rounded-lg border border-zinc-800/50">
-                                <div>
-                                    <div className="font-medium text-white">{tv.name}</div>
-                                    <div className="text-sm text-zinc-500">{tv.location} • {tv.orientation}</div>
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="mt-8"
+                >
+                    <GlassCard className="border-l-4 border-l-orange-500">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                            Attention Needed
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {tvs.filter(tv => !tv.assignedPlaylistId).map(tv => (
+                                <div key={tv.id} className="bg-white/5 p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
+                                    <div>
+                                        <div className="font-medium text-white">{tv.name}</div>
+                                        <div className="text-sm text-zinc-500">{tv.location}</div>
+                                    </div>
+                                    <div className="text-xs bg-orange-500/20 text-orange-200 px-3 py-1 rounded-full border border-orange-500/20">
+                                        No Content
+                                    </div>
                                 </div>
-                                <span className="text-xs bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded-full">
-                                    No Playlist
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                            ))}
+                        </div>
+                    </GlassCard>
+                </motion.div>
             )}
         </div>
     );
@@ -71,28 +112,47 @@ function StatCard({
     value,
     subtitle,
     icon: Icon,
-    highlight = false
+    color
 }: {
     title: string;
     value: string | number;
     subtitle: string;
     icon: any;
-    highlight?: boolean;
+    color: 'blue' | 'purple' | 'green' | 'yellow';
 }) {
+    const colors = {
+        blue: "from-blue-500 to-cyan-500",
+        purple: "from-purple-500 to-pink-500",
+        green: "from-emerald-500 to-teal-500",
+        yellow: "from-orange-500 to-yellow-500"
+    };
+
+    const bgGlow = {
+        blue: "bg-blue-500/10 text-blue-400",
+        purple: "bg-purple-500/10 text-purple-400",
+        green: "bg-emerald-500/10 text-emerald-400",
+        yellow: "bg-orange-500/10 text-orange-400"
+    };
+
     return (
-        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl relative overflow-hidden group">
-            <div className="flex justify-between items-start mb-4">
-                <div>
-                    <p className="text-zinc-400 text-sm font-medium">{title}</p>
-                    <h3 className={`text-3xl font-bold mt-1 ${highlight ? 'text-green-500' : 'text-white'}`}>
-                        {value}
-                    </h3>
+        <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}>
+            <GlassCard className="relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                        <p className="text-zinc-400 text-sm font-medium mb-1">{title}</p>
+                        <h3 className="text-4xl font-bold text-white tracking-tight">
+                            {value}
+                        </h3>
+                    </div>
+                    <div className={`p-3 rounded-xl ${bgGlow[color]} backdrop-blur-md`}>
+                        <Icon size={24} />
+                    </div>
                 </div>
-                <div className="p-3 bg-zinc-800/50 rounded-lg group-hover:bg-zinc-800 transition-colors">
-                    <Icon size={24} className="text-zinc-400" />
-                </div>
-            </div>
-            <p className="text-sm text-zinc-500">{subtitle}</p>
-        </div>
+                <p className="text-sm text-zinc-500 relative z-10">{subtitle}</p>
+
+                {/* Background Gradient Blob */}
+                <div className={`absolute -bottom-4 -right-4 w-24 h-24 bg-gradient-to-br ${colors[color]} rounded-full blur-[40px] opacity-20`} />
+            </GlassCard>
+        </motion.div>
     );
 }
