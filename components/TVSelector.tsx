@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useStore } from '@/store/useStore';
+import { supabase } from '@/lib/supabase';
 import { Monitor } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -9,7 +11,20 @@ interface TVSelectorProps {
 }
 
 export default function TVSelector({ onSelect }: TVSelectorProps) {
-    const { tvs } = useStore();
+    const { tvs, fetchData } = useStore();
+
+    useEffect(() => {
+        fetchData();
+
+        const channel = supabase
+            .channel('tv-selector-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tvs' }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
 
     return (
         <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">

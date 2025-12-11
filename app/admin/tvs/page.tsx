@@ -1,14 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { Plus, Trash2, Monitor, Settings2, PlayCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TV, Orientation } from '@/types';
 
 export default function TVManagementPage() {
-    const { tvs, playlists, addTV, removeTV, assignPlaylistToTV } = useStore();
+    const { tvs, playlists, addTV, removeTV, assignPlaylistToTV, fetchData } = useStore();
     const [isAdding, setIsAdding] = useState(false);
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     // Form State
     const [newName, setNewName] = useState('');
@@ -17,17 +21,16 @@ export default function TVManagementPage() {
     const [newHeight, setNewHeight] = useState(1080);
     const [newOrientation, setNewOrientation] = useState<Orientation>('landscape');
 
-    const handleAddTV = (e: React.FormEvent) => {
+    const handleAddTV = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newTV: TV = {
-            id: `tv-${Date.now()}`,
+        const newTV = {
             name: newName,
             location: newLocation,
             resolution: { width: newWidth, height: newHeight },
             orientation: newOrientation,
             assignedPlaylistId: null
         };
-        addTV(newTV);
+        await addTV(newTV);
         setIsAdding(false);
         resetForm();
     };
@@ -186,8 +189,8 @@ export default function TVManagementPage() {
                                                 type="button"
                                                 onClick={() => setNewOrientation(opt as Orientation)}
                                                 className={`px-4 py-2 rounded-lg border capitalize text-sm transition-all ${newOrientation === opt
-                                                    ? 'bg-blue-600 border-blue-600 text-white'
-                                                    : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700'
+                                                        ? 'bg-blue-600 border-blue-600 text-white'
+                                                        : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700'
                                                     }`}
                                             >
                                                 {opt}

@@ -2,26 +2,38 @@
 
 import { useEffect, useState } from 'react';
 import { useStore } from '@/store/useStore';
+import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 interface PlayerViewProps {
     tvId: string;
+    onReset: () => void;
 }
 
-export default function PlayerView({ tvId }: PlayerViewProps) {
-    const { tvs, playlists } = useStore();
+export default function PlayerView({ tvId, onReset }: PlayerViewProps) {
+    const { tvs, playlists, fetchData } = useStore();
     const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
-    // Sync with Admin changes across tabs
+    // Sync with Admin changes via Supabase Realtime
     useEffect(() => {
-        const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'digital-signage-storage') {
-                useStore.persist.rehydrate();
-            }
+        fetchData();
+
+        const channel = supabase
+            .channel('schema-db-changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public' },
+                (payload) => {
+                    console.log('Change received!', payload);
+                    fetchData();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
         };
-        window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
     // Find configuration
@@ -49,15 +61,20 @@ export default function PlayerView({ tvId }: PlayerViewProps) {
     // Handle Missing Config
     if (!tv) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center text-red-500">
+            <div className="min-h-screen bg-black flex flex-col items-center justify-center text-red-500">
                 <AlertCircle size={48} className="mb-4" />
-                <p>TV Configuration Not Found</p>
+                <p className="text-xl font-bold mb-4">TV Configuration Not Found</p>
+                <button
+                    onClick={onReset}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                    Reset Configuration
+                </button>
             </div>
         );
     }
 
     // Handle Aspect Ratio Container
-    // We simulate the TV's aspect ratio on the browser screen
     const aspectRatio = tv.resolution.width / tv.resolution.height;
 
     if (!playlist || playlist.slides.length === 0) {
@@ -77,17 +94,11 @@ export default function PlayerView({ tvId }: PlayerViewProps) {
 
     return (
         <div className="w-screen h-screen bg-black overflow-hidden flex items-center justify-center">
-            {/* 
-        Container that forces the specific aspect ratio.
-        If the browser window doesn't match, black bars (letterboxing) will appear.
-      */}
             <div
                 style={{
                     aspectRatio: `${tv.resolution.width}/${tv.resolution.height}`,
                     width: '100vw',
                     maxHeight: '100vh',
-                    // If the screen is wider than the aspect ratio, width will be max 100vw but height will be less.
-                    // We usually want "contain" behavior.
                 }}
                 className="relative shadow-2xl bg-black"
             >
@@ -110,7 +121,7 @@ export default function PlayerView({ tvId }: PlayerViewProps) {
                     </motion.div>
                 </AnimatePresence>
 
-                {/* Optional Debug Overlay - remove for production */}
+                {/* Optional Debug Overlay */}
                 <div className="absolute bottom-4 right-4 bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur-md opacity-20 hover:opacity-100 transition-opacity">
                     {tv.name} • Slide {currentSlideIndex + 1}/{playlist.slides.length}
                 </div>

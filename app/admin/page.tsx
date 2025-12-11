@@ -1,10 +1,15 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { Monitor, ListVideo, Play } from 'lucide-react';
 
 export default function AdminDashboard() {
-    const { tvs, playlists } = useStore();
+    const { tvs, playlists, fetchData } = useStore();
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const activeTVs = tvs.filter(tv => tv.assignedPlaylistId !== null).length;
     const totalSlides = playlists.reduce((acc, pl) => acc + pl.slides.length, 0);
@@ -32,7 +37,7 @@ export default function AdminDashboard() {
                 <StatCard
                     title="System Status"
                     value="Online"
-                    subtitle="Local Mode"
+                    subtitle="Supabase Connected"
                     icon={Play}
                     highlight
                 />
