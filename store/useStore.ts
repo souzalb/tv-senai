@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { TV, Playlist, Slide, Ticket, ServiceType, Attendant } from '../types';
+import { TV, Playlist, Slide, Ticket, ServiceType, Attendant, Profile } from '../types';
 
 interface AppState {
     tvs: TV[];
     playlists: Playlist[];
     tickets: Ticket[];
     serviceTypes: ServiceType[];
-    attendants: Attendant[];
+    attendants: Attendant[]; // Kept for legacy/v2
+    profiles: Profile[]; // New V3
     isLoading: boolean;
 
     // Actions
@@ -27,8 +28,8 @@ interface AppState {
 
     // Queue Actions
     createTicket: () => Promise<Ticket | null>;
-    callTicket: (ticketId: string, attendantId: string) => Promise<void>;
-    completeTicket: (ticketId: string) => Promise<void>;
+    callTicket: (ticketId: string) => Promise<void>;
+    completeTicket: (ticketId: string, serviceTypeId?: string) => Promise<void>;
 
     // Settings Actions
     addServiceType: (name: string) => Promise<void>;
@@ -43,18 +44,20 @@ export const useStore = create<AppState>((set, get) => ({
     tickets: [],
     serviceTypes: [],
     attendants: [],
+    profiles: [],
     isLoading: false,
 
     fetchData: async () => {
         set({ isLoading: true });
 
         // Parallel fetching
-        const [tvsReq, plReq, ticketsReq, servicesReq, attendantsReq] = await Promise.all([
+        const [tvsReq, plReq, ticketsReq, servicesReq, attendantsReq, profilesReq] = await Promise.all([
             supabase.from('tvs').select('*').order('created_at', { ascending: true }),
             supabase.from('playlists').select('*, slides(*)').order('created_at', { ascending: true }),
-            supabase.from('tickets').select('*').neq('status', 'completed').order('created_at', { ascending: true }),
+            supabase.from('tickets').select('*').order('created_at', { ascending: true }), // Fetch ALL tickets for history? Or separate history call? Fetching all for now for History Page.
             supabase.from('service_types').select('*').order('created_at'),
-            supabase.from('attendants').select('*').order('created_at')
+            supabase.from('attendants').select('*').order('created_at'),
+            supabase.from('profiles').select('*')
         ]);
 
         // Transform Data
@@ -76,6 +79,7 @@ export const useStore = create<AppState>((set, get) => ({
         const formattedTickets: Ticket[] = (ticketsReq.data || []).map((t: any) => ({ ...t }));
         const formattedServices: ServiceType[] = (servicesReq.data || []).map((s: any) => ({ ...s }));
         const formattedAttendants: Attendant[] = (attendantsReq.data || []).map((a: any) => ({ ...a }));
+        const formattedProfiles: Profile[] = (profilesReq.data || []).map((p: any) => ({ ...p }));
 
         set({
             tvs: formattedTVs,
@@ -83,6 +87,7 @@ export const useStore = create<AppState>((set, get) => ({
             tickets: formattedTickets,
             serviceTypes: formattedServices,
             attendants: formattedAttendants,
+            profiles: formattedProfiles,
             isLoading: false
         });
     },
@@ -157,7 +162,12 @@ export const useStore = create<AppState>((set, get) => ({
             status: 'waiting'
         }).select().single();
 
-        if (error) console.error('Error creating ticket', error);
+        if (error) {
+            console.error('Error creating ticket - Details:', JSON.stringify(error, null, 2));
+            console.error('Error message:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Error hint:', error.hint);
+        }
         else {
             await get().fetchData();
             return data as Ticket;
@@ -165,17 +175,34 @@ export const useStore = create<AppState>((set, get) => ({
         return null;
     },
 
-    callTicket: async (ticketId, attendantId) => {
-        await supabase.from('tickets').update({
-            status: 'called',
-            called_at: new Date().toISOString(),
-            attendant_id: attendantId
-        }).eq('id', ticketId);
-        await get().fetchData();
+    callTicket: (ticketId) => {
+        return new Promise(async (resolve, reject) => {
+            // Get current user
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                reject(new Error("Usuário não autenticado"));
+                return;
+            }
+
+            // Verify if user is in profiles (it should be)
+            // We link the ticket to this user
+            // We NO LONGER save the service type here. It comes at the end.
+            await supabase.from('tickets').update({
+                status: 'called',
+                called_at: new Date().toISOString(),
+                attendant_user_id: user.id
+            }).eq('id', ticketId);
+
+            await get().fetchData();
+            resolve();
+        });
     },
 
-    completeTicket: async (ticketId) => {
-        await supabase.from('tickets').update({ status: 'completed' }).eq('id', ticketId);
+    completeTicket: async (ticketId, serviceTypeId) => {
+        const updates: any = { status: 'completed' };
+        if (serviceTypeId) updates.service_type_id = serviceTypeId;
+
+        await supabase.from('tickets').update(updates).eq('id', ticketId);
         await get().fetchData();
     },
 
@@ -189,6 +216,10 @@ export const useStore = create<AppState>((set, get) => ({
         await get().fetchData();
     },
 
+    // Deprecated? No, maybe keep for manual overrides if needed, 
+    // but user wanted "Selected attendant is logged in user".
+    // We will remove addAttendant/removeAttendant from UI later, but keep store for now or remove if strictly following v3.
+    // Let's keep them but maybe unused.
     addAttendant: async (name, desk) => {
         await supabase.from('attendants').insert({ name, desk_number: desk });
         await get().fetchData();

@@ -32,19 +32,30 @@ export interface Playlist {
 
 export type TicketStatus = 'waiting' | 'called' | 'completed';
 
+
+
+export interface Profile {
+    id: string;
+    email?: string;
+    name?: string;
+    desk_info?: string;
+    role: 'super_admin' | 'editor' | 'viewer';
+}
+
+export interface ServiceType {
+    id: string;
+    name: string;
+}
+
 export interface Ticket {
     id: string;
     number: string;
     status: TicketStatus;
     created_at: string;
     called_at?: string;
-    attendant_id?: string;
+    attendant_id?: string; // Legacy
+    attendant_user_id?: string; // New V3
     service_type_id?: string;
-}
-
-export interface ServiceType {
-    id: string;
-    name: string;
 }
 
 export interface Attendant {

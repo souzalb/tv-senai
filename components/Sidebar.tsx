@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Monitor, ListVideo, Settings, Users, LogOut, Ticket } from 'lucide-react';
+import { LayoutDashboard, Monitor, ListVideo, Settings, Users, LogOut, Ticket, History } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -47,7 +47,12 @@ export default function Sidebar() {
     };
 
     const menuItems = role === 'super_admin'
-        ? [...baseMenuItems, { icon: Users, label: 'Users', href: '/admin/users' }]
+        ? [
+            ...baseMenuItems,
+            { icon: Users, label: 'Users', href: '/admin/users' },
+            { icon: Settings, label: 'Service Types', href: '/admin/queue/settings' },
+            { icon: History, label: 'History', href: '/admin/history' }
+        ]
         : baseMenuItems;
 
     return (

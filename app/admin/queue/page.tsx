@@ -7,30 +7,31 @@ import { Ticket, Users, Megaphone, CheckCircle, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function QueueAdminPage() {
-    const { tickets, attendants, fetchData, callTicket, completeTicket } = useStore();
-    const [selectedAttendantId, setSelectedAttendantId] = useState<string>('');
+    const { tickets, profiles, serviceTypes, fetchData, callTicket, completeTicket } = useStore();
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [selectedServiceId, setSelectedServiceId] = useState<string>('');
 
     useEffect(() => {
         fetchData();
-        const savedAttendant = localStorage.getItem('tv_senai_attendant_id');
-        if (savedAttendant) setSelectedAttendantId(savedAttendant);
+
+        // Get current auth user and match with profile
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                // We rely on store profiles being loaded, or fetch specifically
+                const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+                setCurrentUser(data);
+            }
+        };
+        getUser();
 
         const channel = supabase
             .channel('queue_admin_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-                fetchData();
-            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => fetchData())
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
     }, []);
-
-    const handleSelectAttendant = (id: string) => {
-        setSelectedAttendantId(id);
-        localStorage.setItem('tv_senai_attendant_id', id);
-    };
 
     const waitingTickets = tickets.filter(t => t.status === 'waiting');
     const calledTickets = tickets.filter(t => t.status === 'called').sort((a, b) => new Date(b.called_at!).getTime() - new Date(a.called_at!).getTime());
@@ -38,12 +39,25 @@ export default function QueueAdminPage() {
     const historyTickets = calledTickets.slice(1);
 
     const handleCallNext = async () => {
-        if (waitingTickets.length > 0 && selectedAttendantId) {
-            const next = waitingTickets[0];
-            await callTicket(next.id, selectedAttendantId);
-        } else if (!selectedAttendantId) {
-            alert('Por favor, selecione seu guichê/mesa antes de chamar.');
+        if (waitingTickets.length > 0) {
+            try {
+                const next = waitingTickets[0];
+                await callTicket(next.id);
+            } catch (err) {
+                alert("Erro ao chamar senha: Você precisa estar logado.");
+            }
         }
+    };
+
+    const handleFinish = async () => {
+        if (!currentTicket) return;
+        if (!selectedServiceId) {
+            alert("Por favor, selecione o Tipo de Atendimento antes de encerrar.");
+            return;
+        }
+
+        await completeTicket(currentTicket.id, selectedServiceId);
+        setSelectedServiceId(''); // Reset selection
     };
 
     return (
@@ -57,19 +71,7 @@ export default function QueueAdminPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <select
-                        value={selectedAttendantId}
-                        onChange={(e) => handleSelectAttendant(e.target.value)}
-                        className="bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-300 outline-none focus:border-blue-500"
-                    >
-                        <option value="">Selecione seu Guichê</option>
-                        {attendants.map(a => (
-                            <option key={a.id} value={a.id}>{a.name} {a.desk_number ? `(${a.desk_number})` : ''}</option>
-                        ))}
-                    </select>
-                    <a href="/admin/queue/settings" className="text-zinc-500 hover:text-white p-2 transition-colors" title="Configurações">
-                        <Settings size={20} />
-                    </a>
+                    {/* Settings removed from here - moved to Sidebar */}
                 </div>
             </header>
 
@@ -93,19 +95,56 @@ export default function QueueAdminPage() {
                                 {currentTicket ? currentTicket.number : '--'}
                             </div>
 
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={handleCallNext}
-                                disabled={waitingTickets.length === 0 || !selectedAttendantId}
-                                className={`px-8 py-4 rounded-xl font-bold text-lg flex items-center gap-3 transition-all ${waitingTickets.length > 0 && selectedAttendantId
-                                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
-                                    : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                                    }`}
-                            >
-                                <Megaphone size={24} />
-                                Chamar Próximo
-                            </motion.button>
+                            <div className="flex flex-col gap-3 items-end">
+                                {!currentTicket ? (
+                                    // State 1: No ticket called, show "Call Next"
+                                    <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={handleCallNext}
+                                        disabled={waitingTickets.length === 0}
+                                        className={`px-8 py-4 rounded-xl font-bold text-lg flex items-center gap-3 transition-all ${waitingTickets.length > 0
+                                            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                                            : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        <Megaphone size={24} />
+                                        Chamar Próximo
+                                    </motion.button>
+                                ) : (
+                                    // State 2: Ticket called, show Service Selector + "End Service"
+                                    <div className="flex flex-col gap-3 items-end p-4 border border-white/10 rounded-xl bg-white/5">
+                                        <div className="text-right mb-2">
+                                            <p className="text-sm text-zinc-400">Em Atendimento</p>
+                                            <p className="text-xl font-bold">{currentTicket.number}</p>
+                                        </div>
+                                        <select
+                                            value={selectedServiceId}
+                                            onChange={(e) => setSelectedServiceId(e.target.value)}
+                                            className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-green-500/50 w-64"
+                                        >
+                                            <option value="">Selecione o que foi feito...</option>
+                                            {serviceTypes.map(s => (
+                                                <option key={s.id} value={s.id} className="bg-zinc-900">{s.name}</option>
+                                            ))}
+                                        </select>
+
+                                        <motion.button
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={handleFinish}
+                                            disabled={!selectedServiceId}
+                                            className={`w-full px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${selectedServiceId
+                                                    ? 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-600/20'
+                                                    : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                                }`}
+                                        >
+                                            <CheckCircle size={20} />
+                                            Encerrar Atendimento
+                                        </motion.button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 

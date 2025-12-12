@@ -8,9 +8,17 @@ export async function middleware(request: NextRequest) {
         },
     });
 
+    // Verify env vars
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+        console.error('Middleware: Missing Supabase Environment Variables');
+    }
+
     const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        supabaseUrl || 'https://placeholder.supabase.co',
+        supabaseKey || 'placeholder-key',
         {
             cookies: {
                 getAll() {
@@ -31,9 +39,19 @@ export async function middleware(request: NextRequest) {
         }
     );
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    let user = null;
+    const isPlaceholder = !supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co' || !supabaseKey || supabaseKey === 'placeholder-key';
+
+    if (!isPlaceholder) {
+        try {
+            const { data, error } = await supabase.auth.getUser();
+            if (error) throw error;
+            user = data.user;
+        } catch (err: any) {
+            console.error('Middleware: Error fetching user. verify your Supabase credentials and network connection.');
+            console.error('Error Details:', err.message || err);
+        }
+    }
 
     // Protect /admin routes
     if (request.nextUrl.pathname.startsWith('/admin')) {
