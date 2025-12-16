@@ -129,6 +129,16 @@ export default function AdminDashboard() {
             })
             .sort((a, b) => b.count - a.count);
 
+        // Find Peak Hour
+        let peakHourCount = 0;
+        let peakHourIndex = 0;
+        hourlyCounts.forEach((count, idx) => {
+            if (count > peakHourCount) {
+                peakHourCount = count;
+                peakHourIndex = idx;
+            }
+        });
+
         return {
             totalAllTime: filteredTickets.filter(t => t.status !== 'waiting').length,
             currentlyServing: calledTickets.length,
@@ -137,7 +147,9 @@ export default function AdminDashboard() {
             serviceStats,
             attendantStats,
             hourlyCounts,
-            maxHourly: Math.max(...hourlyCounts, 1) // Avoid div by zero
+            maxHourly: Math.max(...hourlyCounts, 1), // Avoid div by zero
+            peakHourCount,
+            peakHourIndex
         };
     }, [tickets, user, serviceTypes, profiles, dateStart, dateEnd, filterService, filterAttendant]);
 
@@ -242,36 +254,87 @@ export default function AdminDashboard() {
 
             {/* Hourly Distribution (Peak Hours) */}
             <GlassCard>
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-orange-500/10 rounded-lg text-orange-400">
-                        <BarChart3 size={20} />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-white">Horários de Pico</h3>
-                        <p className="text-xs text-zinc-500">Distribuição de movimentação por hora (00h - 23h)</p>
-                    </div>
-                </div>
-                <div className="h-32 flex items-end gap-1">
-                    {metrics?.hourlyCounts.map((count, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-                            {/* Bar */}
-                            <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: `${(count / (metrics.maxHourly || 1)) * 100}%` }}
-                                transition={{ duration: 0.5, delay: i * 0.02 }}
-                                className="w-full bg-white/5 hover:bg-orange-500 rounded-t-sm transition-colors relative min-h-[4px]"
-                            >
-                                {/* Tooltip */}
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] px-2 py-1 rounded pointer-events-none whitespace-nowrap z-10">
-                                    {i}h: {count} senhas
-                                </div>
-                            </motion.div>
-                            {/* Label (only select hours) */}
-                            <span className="text-[10px] text-zinc-600 h-4">
-                                {i % 3 === 0 ? `${i}h` : ''}
-                            </span>
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-orange-500/10 rounded-lg text-orange-400">
+                            <BarChart3 size={20} />
                         </div>
-                    ))}
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Horários de Pico</h3>
+                            <p className="text-xs text-zinc-500">Distribuição de movimentação por hora</p>
+                        </div>
+                    </div>
+                    {/* Summary of Peak */}
+                    {metrics && metrics.peakHourCount > 0 && (
+                        <div className="text-right">
+                            <div className="text-xs text-zinc-400">Horário de Maior Movimento</div>
+                            <div className="text-lg font-bold text-white">
+                                {metrics.peakHourIndex}h <span className="text-sm font-normal text-zinc-500">({metrics.peakHourCount} senhas)</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="h-40 flex items-end gap-1.5 pt-4">
+                    {metrics?.hourlyCounts.map((count, i) => {
+                        const intensity = count / (metrics.maxHourly || 1);
+                        const isPeak = i === metrics.peakHourIndex && count > 0;
+                        const isCurrentHour = new Date().getHours() === i && new Date().toDateString() === new Date().toDateString(); // Simple check, ideally check selected date range
+
+                        // Determine Color
+                        let barColor = "bg-white/5";
+                        if (intensity > 0.7) barColor = "bg-red-500";
+                        else if (intensity > 0.4) barColor = "bg-orange-500";
+                        else if (intensity > 0) barColor = "bg-blue-500";
+
+                        // Gradient definition for inline styles if we want gradients, 
+                        // but solid colors with opacity logic or classes might be cleaner for tailwind.
+                        // Let's use specific classes for gradients.
+                        let gradientClass = "from-white/10 to-white/5"; // Default
+                        if (intensity > 0.7) gradientClass = "from-red-500 to-orange-600 shadow-[0_0_15px_rgba(239,68,68,0.4)]";
+                        else if (intensity > 0.4) gradientClass = "from-orange-500 to-yellow-600";
+                        else if (intensity > 0) gradientClass = "from-blue-500 to-cyan-500";
+
+                        return (
+                            <div key={i} className="flex-1 flex flex-col items-center gap-2 group relative h-full justify-end">
+                                {/* Tooltip */}
+                                <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 transition-all duration-200 pointer-events-none z-20 ${count > 0 ? 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0' : 'opacity-0'}`}>
+                                    <div className="bg-zinc-900 border border-white/10 text-white text-[10px] px-2 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex flex-col items-center">
+                                        <span className="font-bold text-sm">{count}</span>
+                                        <span className="text-zinc-400">senhas às {i}h</span>
+                                    </div>
+                                    {/* Arrow */}
+                                    <div className="w-2 h-2 bg-zinc-900 border-r border-b border-white/10 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
+                                </div>
+
+                                {/* Bar */}
+                                <motion.div
+                                    initial={false}
+                                    animate={{
+                                        height: `${Math.max((count / (metrics.maxHourly || 1)) * 100, 2)}%`,
+                                        opacity: count > 0 ? 1 : 0.3
+                                    }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    className={`w-full rounded-t-sm relative overflow-hidden bg-gradient-to-t ${gradientClass} ${isCurrentHour ? 'ring-1 ring-white/50' : ''}`}
+                                >
+                                    {/* Shine effect for high traffic */}
+                                    {intensity > 0.7 && (
+                                        <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/20 to-transparent animate-pulse" />
+                                    )}
+                                </motion.div>
+
+                                {/* Label */}
+                                <span className={`text-[10px] h-4 transition-colors ${isPeak ? 'text-white font-bold' : 'text-zinc-600'} ${isCurrentHour ? 'text-blue-400 font-bold' : ''}`}>
+                                    {i % 3 === 0 || isPeak ? `${i}h` : ''}
+                                </span>
+
+                                {/* Current Hour Indicator Dot */}
+                                {isCurrentHour && (
+                                    <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-blue-400 shadow-[0_0_5px_rgba(96,165,250,0.8)]" />
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </GlassCard>
 

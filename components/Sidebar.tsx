@@ -66,8 +66,8 @@ export default function Sidebar() {
     return (
         <aside className="fixed left-4 top-4 bottom-4 w-72 glass-panel rounded-3xl flex flex-col p-6 z-50">
             <div className="mb-10 px-2">
-                <h1 className="text-2xl font-bold text-gradient mb-1">NeonSign</h1>
-                <p className="text-xs text-zinc-500 uppercase tracking-wider">Premium Digital Signage</p>
+                <h1 className="text-2xl font-bold text-gradient mb-1">OmniHub</h1>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider">Management System</p>
             </div>
 
             <nav className="flex-1 space-y-2">
