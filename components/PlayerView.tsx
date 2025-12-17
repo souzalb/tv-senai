@@ -111,7 +111,7 @@ export default function PlayerView({ tvId, onReset }: PlayerViewProps) {
                     </div>
 
                     {/* Sidebar (25%) */}
-                    <div className="w-[25%] max-w-sm h-full">
+                    <div className="w-[25%] h-full" style={{ containerType: 'size' }}>
                         <QueueSidebar />
                     </div>
                 </div>
